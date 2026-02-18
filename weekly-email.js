@@ -132,7 +132,7 @@ const getStarDisplay = (rating) => {
   const emptyStars = 5 - fullStars - (hasHalf ? 1 : 0);
   let html = '';
   for (let i = 0; i < fullStars;  i++) html += '<span style="color:#fbbf24;font-size:20px;">★</span>';
-  if (hasHalf)                          html += '<span style="color:#fbbf24;font-size:20px;">⯪</span>';
+  if (hasHalf)                          html += '<span style="color:#fbbf24;font-size:20px;">\u272B</span>';
   for (let i = 0; i < emptyStars; i++) html += '<span style="color:#d1d5db;font-size:20px;">★</span>';
   return html;
 };
@@ -190,19 +190,19 @@ const actionsHtml = (() => {
   if (reviewCount === 0) {
     return `
       <div style="background:#fff;border-radius:12px;padding:20px;border:1px solid #e5e7eb;">
-        <div style="font-size:14px;font-weight:600;color:#111827;margin-bottom:8px;">📊 Monitor Incoming Reviews</div>
+        <div style="font-size:14px;font-weight:600;color:#111827;margin-bottom:8px;">\uD83D\uDCCA Monitor Incoming Reviews</div>
         <div style="font-size:13px;color:#6b7280;">Set up alerts to be notified as soon as new reviews arrive.</div>
       </div>`;
   }
   const actions = [];
   if (topNegatives.some(t => t.includes('Cleanliness')))
-    actions.push({ icon: '🧹', title: 'Address Cleanliness',  body: 'Schedule a deep-clean audit and review housekeeping checklists.' });
+    actions.push({ icon: '\uD83E\uDDF9', title: 'Address Cleanliness',  body: 'Schedule a deep-clean audit and review housekeeping checklists.' });
   if (topNegatives.some(t => t.includes('Service')))
     actions.push({ icon: '⏱️', title: 'Reduce Wait Times',    body: 'Review staffing levels during peak hours and streamline check-in.' });
   if (topNegatives.some(t => t.includes('Staff')))
-    actions.push({ icon: '🎓', title: 'Staff Training',       body: 'Schedule a refresher on guest-facing communication standards.' });
+    actions.push({ icon: '\uD83C\uDF93', title: 'Staff Training',       body: 'Schedule a refresher on guest-facing communication standards.' });
   if (topNegatives.some(t => t.includes('Pest')))
-    actions.push({ icon: '🐛', title: 'Pest Control',         body: 'Contact a licensed pest control service immediately.' });
+    actions.push({ icon: '\uD83D\uDC1B', title: 'Pest Control',         body: 'Contact a licensed pest control service immediately.' });
   if (actions.length === 0)
     actions.push({ icon: '⭐', title: 'Maintain Standards',   body: 'Great week — keep up the consistency and encourage guests to leave reviews.' });
 
@@ -275,13 +275,13 @@ const emailHtml = `<!DOCTYPE html>
 
     <!-- Quick Summary -->
     <div style="background-color:#f9fafb;border-radius:16px;padding:24px;margin-bottom:24px;border:1px solid #e5e7eb;border-left:5px solid ${ratingColor};">
-      <div style="font-size:16px;font-weight:700;color:#111827;margin-bottom:12px;">📋 Quick Summary</div>
+      <div style="font-size:16px;font-weight:700;color:#111827;margin-bottom:12px;">\uD83D\uDCCB Quick Summary</div>
       <div style="font-size:14px;color:#4b5563;line-height:1.7;">${esc(quickSummary)}</div>
     </div>
 
     <!-- Common Themes -->
     <div style="background-color:#f9fafb;border-radius:16px;padding:24px;margin-bottom:20px;border:1px solid #e5e7eb;">
-      <div style="font-size:16px;font-weight:700;color:#f97316;margin-bottom:16px;padding-bottom:14px;border-bottom:2px solid #e5e7eb;">🎯 Common Themes</div>
+      <div style="font-size:16px;font-weight:700;color:#f97316;margin-bottom:16px;padding-bottom:14px;border-bottom:2px solid #e5e7eb;">\uD83C\uDFAF Common Themes</div>
       ${themesHtml}
     </div>
 
@@ -299,13 +299,13 @@ const emailHtml = `<!DOCTYPE html>
 
     <!-- Verity Insight -->
     <div style="background-color:#f9fafb;border-radius:16px;padding:24px;margin-bottom:20px;border:1px solid #e5e7eb;">
-      <div style="font-size:16px;font-weight:700;color:#8b5cf6;margin-bottom:16px;padding-bottom:14px;border-bottom:2px solid #e5e7eb;">💡 Verity Insight</div>
+      <div style="font-size:16px;font-weight:700;color:#8b5cf6;margin-bottom:16px;padding-bottom:14px;border-bottom:2px solid #e5e7eb;">\uD83D\uDCA1 Verity Insight</div>
       ${insightsHtml}
     </div>
 
     <!-- Actionable Improvements -->
     <div style="background-color:#f9fafb;border-radius:16px;padding:24px;margin-bottom:20px;border:1px solid #e5e7eb;">
-      <div style="font-size:16px;font-weight:700;color:#f97316;margin-bottom:16px;padding-bottom:14px;border-bottom:2px solid #e5e7eb;">🚀 Actionable Improvements</div>
+      <div style="font-size:16px;font-weight:700;color:#f97316;margin-bottom:16px;padding-bottom:14px;border-bottom:2px solid #e5e7eb;">\uD83D\uDE80 Actionable Improvements</div>
       <table width="100%" cellpadding="0" cellspacing="0"><tr>
         <td>${actionsHtml}</td>
       </tr></table>
