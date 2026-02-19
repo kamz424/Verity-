@@ -244,14 +244,16 @@ const actionsHtml = (() => {
   if (topNeg && actions.length < 2) {
     const n     = themeCount(topNeg);
     const label = topNeg.replace(/\s*\(\d+\)$/, '');
-    let icon = '&#9888;&#65039;', body = `${n} guest${n !== 1 ? 's' : ''} flagged this. Review the specific complaints and put a fix in place before next week.`;
-    if      (negMatch('Cleanliness'))              { icon = '&#129529;'; body = `${n} guest${n !== 1 ? 's' : ''} flagged cleanliness. Walk every room today, update your housekeeping checklist, and add a sign-off before marking any room ready.`; }
-    else if (negMatch('Service delay'))            { icon = '&#9200;&#65039;'; body = `${n} guest${n !== 1 ? 's' : ''} experienced long waits. Review staffing during peak hours and simplify your check-in process.`; }
-    else if (negMatch('Staff'))                    { icon = '&#127892;'; body = `${n} guest${n !== 1 ? 's' : ''} had a poor experience with staff. Hold a short team briefing and revisit your hospitality standards.`; }
-    else if (negMatch('Pest'))                     { icon = '&#128027;'; body = `Pest complaints directly damage your reputation. Call a licensed pest control service today and close affected areas until cleared.`; }
-    else if (negMatch('Noise'))                    { icon = '&#128263;'; body = `${n} guest${n !== 1 ? 's' : ''} were disturbed by noise. Investigate the source and enforce a clear quiet-hours policy.`; }
-    else if (negMatch('Maintenance'))              { icon = '&#128295;'; body = `${n} guest${n !== 1 ? 's' : ''} reported broken or faulty items. Do a walkthrough today and prioritise anything affecting comfort.`; }
-    else if (negMatch('Value'))                    { icon = '&#128176;'; body = `Guests questioned your pricing. Add more value to stays or make sure your listing sets clearer expectations.`; }
+    // FIX: match against label only (not all topNegatives) to avoid body/title mismatch
+    const labelMatch = (kw) => label.toLowerCase().includes(kw.toLowerCase());
+    let icon = '&#9888;', body = `${n} guest${n !== 1 ? 's' : ''} flagged this. Review the specific complaints and put a fix in place before next week.`;
+    if      (labelMatch('Cleanliness'))   { icon = '&#129529;'; body = `${n} guest${n !== 1 ? 's' : ''} flagged cleanliness issues. Review your cleaning process and add a sign-off checklist before marking anything ready for the next customer.`; }
+    else if (labelMatch('Service delay')) { icon = '&#9200;';   body = `${n} guest${n !== 1 ? 's' : ''} experienced long waits. Review staffing during peak hours and look at ways to speed up your service flow.`; }
+    else if (labelMatch('Staff'))         { icon = '&#127892;'; body = `${n} guest${n !== 1 ? 's' : ''} had a poor experience with staff. Hold a short team briefing and revisit your customer service standards.`; }
+    else if (labelMatch('Pest'))          { icon = '&#128027;'; body = `Pest complaints directly damage your reputation. Contact a licensed pest control service today and address the affected area immediately.`; }
+    else if (labelMatch('Noise'))         { icon = '&#128263;'; body = `${n} guest${n !== 1 ? 's' : ''} were disturbed by noise. Investigate the source and put clear measures in place to reduce disruption.`; }
+    else if (labelMatch('Maintenance'))   { icon = '&#128295;'; body = `${n} guest${n !== 1 ? 's' : ''} reported broken or faulty items. Do a walkthrough today and prioritise anything affecting the customer experience.`; }
+    else if (labelMatch('Value'))         { icon = '&#128176;'; body = `Customers questioned your pricing. Make sure your offer clearly communicates value or consider adjusting expectations in your listing or menu.`; }
     actions.push({ icon, title: `Fix: ${label}`, body });
   }
 
@@ -382,8 +384,7 @@ const emailHtml = `<!DOCTYPE html>
 
   <!-- Footer -->
   <tr><td style="background:#f8fafc;padding:28px 40px;border-top:1px solid #e5e7eb;text-align:center;">
-    <div style="font-size:12px;color:#9ca3af;">This report was generated automatically by <strong style="color:#f97316;">Verity</strong> · Revelation Marketing</div>
-    <div style="font-size:11px;color:#d1d5db;margin-top:6px;">You are receiving this because you are a Verity subscriber.</div>
+    <div style="font-size:12px;color:#9ca3af;">Powered by <strong style="color:#f97316;font-weight:700;letter-spacing:0.5px;">Verity AI</strong></div>
   </td></tr>
 
 </table>
