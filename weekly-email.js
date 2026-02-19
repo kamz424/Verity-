@@ -34,32 +34,40 @@ const analyzeReviews = () => {
   const themes = { positive: [], negative: [], allTexts: [] };
   if (reviewCount === 0) return themes;
 
+  // Track how many reviews mention each theme so we surface real patterns
+  const negCounts = {};
+  const posCounts = {};
+
+  const negChecks = [
+    ['Cleanliness issues',    w => /filthy|dirty|stain|unclean|disgust|gross|filth|mold|mould|smell|odou?r|grimy|grease|dust|grime|germ|unhygienic/.test(w)],
+    ['Pest infestation',      w => /cockroach|pest|rodent|mouse|rat|insect|ant|spider|fly|flies|vermin|bug/.test(w)],
+    ['Service delays',        w => /wait|waiting|took (too |forever|ages|long)|ignored|delay|slow service|no response|never came|long (time|queue)|understaffed/.test(w)],
+    ['Staff behaviour',       w => /rude|unprofessional|unfriendly|disrespectful|attitude|dismissive|unhelpful|condescending|impolite|mean|snarky|horrible staff|terrible staff|bad staff|worst staff|incompetent/.test(w)],
+    ['Noise complaints',      w => /nois(y|e)|loud|thin wall|party|music too|disruptive|disturb|couldn.t sleep|kept.*awake/.test(w)],
+    ['Maintenance issues',    w => /broken|doesn.t work|not working|out of order|damage|maintenance|needs? (fix|repair)|faulty|leak|drip|mould|crack/.test(w)],
+    ['Value concerns',        w => /overpriced|expensive|rip.?off|not worth|waste of money|overcharge|too (pricey|much)/.test(w)],
+  ];
+
+  const posChecks = [
+    ['Cleanliness',           w => /spotless|immaculate|pristine|sparkling|very clean|super clean/.test(w) || (w.includes('clean') && !/dirty|unclean/.test(w))],
+    ['Great staff service',   w => /friendly|helpful|professional|kind|wonderful|amazing staff|great staff|excellent staff|courteous|attentive|warm|welcoming|polite/.test(w)],
+    ['Room comfort',          w => /comfortable|cozy|comfy|spacious|lovely room|great room|beautiful room|perfect room|nice room/.test(w)],
+    ['Good location',         w => /great location|perfect location|well.?located|convenient|central|close to|easy access/.test(w)],
+    ['Good value',            w => /great value|worth (it|every)|affordable|reasonable price|fair price|bang for|good deal/.test(w)],
+    ['Food quality',          w => /delicious|great food|amazing food|tasty|excellent (food|meal|breakfast|dinner)/.test(w)],
+  ];
+
   reviewsArray.forEach(review => {
     const text = String(review.comment || '').toLowerCase();
     if (!text) return;
-
     themes.allTexts.push(text);
-
-    // Extract themes from REAL reviews only
-    if (text.includes('filthy') || text.includes('dirty') || text.includes('stains') || text.includes('clean'))
-      themes.negative.push('Cleanliness issues');
-    if (text.includes('cockroach') || text.includes('bug') || text.includes('pest'))
-      themes.negative.push('Pest infestation');
-    if (text.includes('wait') || text.includes('hours') || text.includes('ignored') || text.includes('delay'))
-      themes.negative.push('Service delays');
-    if (text.includes('rude') || text.includes('staff') || text.includes('unfriendly'))
-      themes.negative.push('Staff issues');
-
-    // Positive themes (if any)
-    if (text.includes('clean') && !text.includes('dirty'))
-      themes.positive.push('Cleanliness');
-    if (text.includes('friendly') || text.includes('helpful'))
-      themes.positive.push('Good service');
+    negChecks.forEach(([label, fn]) => { if (fn(text)) negCounts[label] = (negCounts[label] || 0) + 1; });
+    posChecks.forEach(([label, fn]) => { if (fn(text)) posCounts[label] = (posCounts[label] || 0) + 1; });
   });
 
-  // FIX: was "…new Set(…)" (Unicode ellipsis) – must be "...new Set(...)" (spread operator)
-  themes.positive = [...new Set(themes.positive)];
-  themes.negative = [...new Set(themes.negative)];
+  // Sort by frequency, format as "Theme (N)" so the count is available to actions
+  themes.negative = Object.entries(negCounts).sort((a, b) => b[1] - a[1]).map(([t, n]) => `${t} (${n})`);
+  themes.positive = Object.entries(posCounts).sort((a, b) => b[1] - a[1]).map(([t, n]) => `${t} (${n})`);
   return themes;
 };
 
@@ -128,12 +136,20 @@ const ratingColor = avgRating < 2 ? '#ef4444' : avgRating < 3.5 ? '#f59e0b' : '#
 const getStarDisplay = (rating) => {
   if (rating === 0) return '<span style="color:#d1d5db;font-size:20px;">☆☆☆☆☆</span>';
   const fullStars  = Math.floor(rating);
-  const hasHalf    = rating % 1 >= 0.5;
+  const hasHalf    = (rating - fullStars) >= 0.5;
   const emptyStars = 5 - fullStars - (hasHalf ? 1 : 0);
-  let html = '';
-  for (let i = 0; i < fullStars;  i++) html += '<span style="color:#fbbf24;font-size:20px;">★</span>';
-  if (hasHalf)                          html += '<span style="color:#fbbf24;font-size:20px;">⯪</span>';
-  for (let i = 0; i < emptyStars; i++) html += '<span style="color:#d1d5db;font-size:20px;">★</span>';
+  const full  = '<span style="color:#fbbf24;font-size:20px;line-height:1;display:inline-block;vertical-align:middle;">★</span>';
+  const empty = '<span style="color:#d1d5db;font-size:20px;line-height:1;display:inline-block;vertical-align:middle;">★</span>';
+  // Half star: left half filled orange, right half gray.
+  // Uses nested overflow:hidden — avoids position:absolute which email clients strip.
+  const half =
+    '<span style="display:inline-block;overflow:hidden;width:11px;vertical-align:middle;">' +
+      '<span style="display:inline-block;font-size:20px;line-height:1;color:#fbbf24;white-space:nowrap;">★</span>' +
+    '</span>' +
+    '<span style="display:inline-block;overflow:hidden;width:11px;vertical-align:middle;">' +
+      '<span style="display:inline-block;font-size:20px;line-height:1;color:#d1d5db;white-space:nowrap;margin-left:-11px;">★</span>' +
+    '</span>';
+  let html = full.repeat(fullStars) + (hasHalf ? half : '') + empty.repeat(emptyStars);
   return html;
 };
 
@@ -190,26 +206,107 @@ const actionsHtml = (() => {
   if (reviewCount === 0) {
     return `
       <div style="background:#fff;border-radius:12px;padding:20px;border:1px solid #e5e7eb;">
-        <div style="font-size:14px;font-weight:600;color:#111827;margin-bottom:8px;">📊 Monitor Incoming Reviews</div>
-        <div style="font-size:13px;color:#6b7280;">Set up alerts to be notified as soon as new reviews arrive.</div>
+        <div style="font-size:14px;font-weight:600;color:#111827;margin-bottom:8px;">📊 Start Collecting Reviews</div>
+        <div style="font-size:13px;color:#6b7280;">No reviews this week. Send a follow-up email to recent guests asking for feedback — even one or two responses will help you understand what's working.</div>
       </div>`;
   }
+
   const actions = [];
-  if (topNegatives.some(t => t.includes('Cleanliness')))
-    actions.push({ icon: '🧹', title: 'Address Cleanliness',  body: 'Schedule a deep-clean audit and review housekeeping checklists.' });
-  if (topNegatives.some(t => t.includes('Service')))
-    actions.push({ icon: '⏱️', title: 'Reduce Wait Times',    body: 'Review staffing levels during peak hours and streamline check-in.' });
-  if (topNegatives.some(t => t.includes('Staff')))
-    actions.push({ icon: '🎓', title: 'Staff Training',       body: 'Schedule a refresher on guest-facing communication standards.' });
-  if (topNegatives.some(t => t.includes('Pest')))
-    actions.push({ icon: '🐛', title: 'Pest Control',         body: 'Contact a licensed pest control service immediately.' });
-  if (actions.length === 0)
-    actions.push({ icon: '⭐', title: 'Maintain Standards',   body: 'Great week — keep up the consistency and encourage guests to leave reviews.' });
+  const criticalCount = reviewsArray.filter(r => (Number(r.rating) || 0) <= 2).length;
+  const oneStarCount  = reviewsArray.filter(r => (Number(r.rating) || 0) === 1).length;
+
+  // Helper: extract the count from a theme string like "Cleanliness issues (3)"
+  const themeCount = (label) => {
+    const match = label.match(/\((\d+)\)/);
+    return match ? Number(match[1]) : 1;
+  };
+
+  // ── Rating-based action (always fires when there are critical reviews) ─────
+  if (criticalCount > 0) {
+    const extra = oneStarCount > 0 ? ` (${oneStarCount} gave 1 star)` : '';
+    actions.push({ icon: '📞', title: 'Reach Out to Unhappy Guests',
+      body: `${criticalCount} guest${criticalCount !== 1 ? 's' : ''} rated you 2 stars or below${extra}. Contact them personally within 24 hours — a genuine apology and offer to make things right can recover the relationship and sometimes even the review.` });
+  }
+
+  // ── Theme-based actions (fire based on expanded keyword matching) ──────────
+  const negMatch = (keyword) => topNegatives.find(t => t.toLowerCase().includes(keyword.toLowerCase()));
+
+  const cleanTheme = negMatch('Cleanliness');
+  if (cleanTheme) {
+    const n = themeCount(cleanTheme);
+    actions.push({ icon: '🧹', title: 'Fix Cleanliness Standards',
+      body: `${n} guest${n !== 1 ? 's' : ''} flagged cleanliness. Walk through every room and shared space today — inspect what guests actually see. Update your housekeeping checklist and add a supervisor sign-off before any room is marked ready.` });
+  }
+
+  const serviceTheme = negMatch('Service delay') || negMatch('Service');
+  if (serviceTheme) {
+    const n = themeCount(serviceTheme);
+    actions.push({ icon: '⏱️', title: 'Cut Response & Wait Times',
+      body: `${n} guest${n !== 1 ? 's' : ''} mentioned slow service or long waits. Map your busiest hours and make sure staffing matches demand. If check-in is slow, consider a pre-arrival form to speed things up.` });
+  }
+
+  const staffTheme = negMatch('Staff');
+  if (staffTheme) {
+    const n = themeCount(staffTheme);
+    actions.push({ icon: '🎓', title: 'Address Staff Behaviour',
+      body: `${n} guest${n !== 1 ? 's' : ''} had a poor experience with staff. Hold a short team briefing this week — share specific examples from reviews (without naming guests) and revisit basic hospitality standards. Reinforce what good looks like.` });
+  }
+
+  const pestTheme = negMatch('Pest');
+  if (pestTheme) {
+    actions.push({ icon: '🐛', title: 'Pest Control — Act Immediately',
+      body: 'Pest mentions in reviews are reputation killers. Call a licensed pest control service today, not next week. Document everything for compliance and close any affected rooms until cleared.' });
+  }
+
+  const noiseTheme = negMatch('Noise');
+  if (noiseTheme) {
+    const n = themeCount(noiseTheme);
+    actions.push({ icon: '🔇', title: 'Reduce Noise Complaints',
+      body: `${n} guest${n !== 1 ? 's' : ''} were disturbed by noise. Identify the source — neighbouring rooms, street noise, or internal operations. Implement a quiet-hours policy and communicate it clearly at check-in.` });
+  }
+
+  const maintTheme = negMatch('Maintenance');
+  if (maintTheme) {
+    const n = themeCount(maintTheme);
+    actions.push({ icon: '🔧', title: 'Maintenance Walkthrough',
+      body: `${n} guest${n !== 1 ? 's' : ''} mentioned broken or malfunctioning items. Do a full property walkthrough today and log everything that needs attention. Prioritise anything that directly affects comfort — heating, hot water, locks.` });
+  }
+
+  const valueTheme = negMatch('Value');
+  if (valueTheme) {
+    actions.push({ icon: '💰', title: 'Justify Your Pricing',
+      body: `Guests questioned whether the price matched the experience. Either improve what's included (better toiletries, faster Wi-Fi, welcome drink) or make sure your listing accurately sets expectations so guests aren't surprised.` });
+  }
+
+  // ── Rating-level fallback (fires when no themes matched but rating is low) ──
+  if (actions.length === 0 && avgRating < 4) {
+    actions.push({ icon: '📈', title: 'Investigate What's Dragging Your Rating',
+      body: `Your average is ${avgRating.toFixed(1)}/5.0 across ${reviewCount} review${reviewCount !== 1 ? 's' : ''} this week. Read every review carefully and pick the single most common complaint. Fix that one thing before the next report.` });
+  }
+
+  // ── Online reputation nudge (fires when rating is below 4) ────────────────
+  if (avgRating < 4) {
+    actions.push({ icon: '⭐', title: 'Actively Manage Your Online Rating',
+      body: `At ${avgRating.toFixed(1)} stars, new guests are choosing competitors. Reply to every negative review within 48 hours — a thoughtful response shows you care and can soften the impact. Then start asking happy guests to share their experience online.` });
+  }
+
+  // ── Positive reinforcement (fires when doing well) ─────────────────────────
+  if (topPositives.length > 0 && avgRating >= 4) {
+    const highlights = topPositives.slice(0, 2).map(t => t.replace(/\s*\(\d+\)$/, '').toLowerCase()).join(' and ');
+    actions.push({ icon: '💪', title: 'Double Down on What's Working',
+      body: `Guests are consistently praising your ${highlights}. Highlight this in your listing photos and descriptions. Make sure new staff understand exactly what's driving these compliments so the standard doesn't slip.` });
+  }
+
+  // ── Final safety net ───────────────────────────────────────────────────────
+  if (actions.length === 0) {
+    actions.push({ icon: '✅', title: 'Maintain Your Standards',
+      body: `${reviewCount} review${reviewCount !== 1 ? 's' : ''} this week with a ${avgRating.toFixed(1)}/5.0 average — solid performance. Stay visible: walk the property daily, chat with guests, and catch small issues before they make it into a review.` });
+  }
 
   return actions.map(a => `
-    <div style="background:#fff;border-radius:12px;padding:20px;border:1px solid #e5e7eb;">
+    <div style="background:#fff;border-radius:12px;padding:20px;border:1px solid #e5e7eb;margin-bottom:10px;">
       <div style="font-size:14px;font-weight:600;color:#111827;margin-bottom:8px;">${a.icon} ${esc(a.title)}</div>
-      <div style="font-size:13px;color:#6b7280;">${esc(a.body)}</div>
+      <div style="font-size:13px;color:#6b7280;line-height:1.6;">${a.body}</div>
     </div>`).join('');
 })();
 
