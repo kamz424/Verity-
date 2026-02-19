@@ -21,7 +21,8 @@ const avgRating = reviewCount > 0
 
 // ── Business info from the merged data ───────────────────────
 const businessName = item.businessName || 'Grand Hotel';
-const location     = item.Location || item.location || '';
+const rawLocation  = item.Location || item.location || '';
+const location     = (rawLocation === 'undefined' || rawLocation === 'null') ? '' : rawLocation;
 const ownerEmail   = item.ownerEmail || '';
 
 // ── AI text – ALWAYS cast to string to prevent .split errors ──
@@ -163,29 +164,42 @@ const esc = (s) => String(s || '')
   .replace(/>/g, '&gt;');
 
 // ── HTML section builders ─────────────────────────────────────
+// Use table rows instead of flex — flex gap is stripped by Gmail and Outlook.
 const themesHtml = commonThemes.length > 0
   ? commonThemes.map((t, i) => `
-    <div style="display:flex;align-items:center;gap:14px;padding:14px 0;${i < commonThemes.length - 1 ? 'border-bottom:1px solid #e5e7eb;' : ''}">
-      <div style="width:8px;height:8px;border-radius:50%;background-color:#f97316;flex-shrink:0;"></div>
-      <span style="font-size:14px;color:#374151;line-height:1.5;">${esc(t)}</span>
-    </div>`).join('')
-  : '<p style="color:#9ca3af;font-size:14px;">No recurring themes identified this week.</p>';
+    <table width="100%" cellpadding="0" cellspacing="0" style="padding:12px 0;${i < commonThemes.length - 1 ? 'border-bottom:1px solid #e5e7eb;' : ''}">
+      <tr>
+        <td width="18" style="vertical-align:middle;padding-right:12px;">
+          <div style="width:8px;height:8px;border-radius:50%;background-color:#f97316;"></div>
+        </td>
+        <td style="font-size:14px;color:#374151;line-height:1.5;vertical-align:middle;">${esc(t)}</td>
+      </tr>
+    </table>`).join('')
+  : '<p style="color:#9ca3af;font-size:14px;margin:0;">No recurring themes identified this week.</p>';
 
 const positivesHtml = topPositives.length > 0
   ? topPositives.map(t => `
-    <div style="display:flex;align-items:flex-start;gap:12px;padding:10px 0;">
-      <span style="color:#10b981;font-size:18px;flex-shrink:0;">✓</span>
-      <span style="font-size:14px;color:#374151;line-height:1.5;">${esc(t)}</span>
-    </div>`).join('')
-  : '<p style="color:#9ca3af;font-size:14px;">No positive themes identified this week.</p>';
+    <table width="100%" cellpadding="0" cellspacing="0" style="padding:10px 0;">
+      <tr>
+        <td width="24" style="vertical-align:top;padding-right:10px;padding-top:1px;">
+          <span style="color:#10b981;font-size:16px;font-weight:700;">&#10003;</span>
+        </td>
+        <td style="font-size:14px;color:#374151;line-height:1.5;vertical-align:top;">${esc(t)}</td>
+      </tr>
+    </table>`).join('')
+  : '<p style="color:#9ca3af;font-size:14px;margin:0;">No positive themes identified this week.</p>';
 
 const negativesHtml = topNegatives.length > 0
   ? topNegatives.map(t => `
-    <div style="display:flex;align-items:flex-start;gap:12px;padding:10px 0;">
-      <span style="color:#ef4444;font-size:18px;flex-shrink:0;">!</span>
-      <span style="font-size:14px;color:#374151;line-height:1.5;">${esc(t)}</span>
-    </div>`).join('')
-  : '<p style="color:#9ca3af;font-size:14px;">No negative themes identified this week.</p>';
+    <table width="100%" cellpadding="0" cellspacing="0" style="padding:10px 0;">
+      <tr>
+        <td width="24" style="vertical-align:top;padding-right:10px;padding-top:1px;">
+          <span style="color:#ef4444;font-size:16px;font-weight:700;">!</span>
+        </td>
+        <td style="font-size:14px;color:#374151;line-height:1.5;vertical-align:top;">${esc(t)}</td>
+      </tr>
+    </table>`).join('')
+  : '<p style="color:#9ca3af;font-size:14px;margin:0;">No negative themes identified this week.</p>';
 
 const insightsHtml = (() => {
   if (reviewCount === 0)
@@ -206,8 +220,8 @@ const actionsHtml = (() => {
   if (reviewCount === 0) {
     return `
       <div style="background:#fff;border-radius:12px;padding:20px;border:1px solid #e5e7eb;">
-        <div style="font-size:14px;font-weight:600;color:#111827;margin-bottom:8px;">📊 Start Collecting Reviews</div>
-        <div style="font-size:13px;color:#6b7280;">No reviews this week. Send a follow-up email to recent guests asking for feedback — even one or two responses will help you understand what's working.</div>
+        <div style="font-size:14px;font-weight:600;color:#111827;margin-bottom:8px;">&#128202; Start Collecting Reviews</div>
+        <div style="font-size:13px;color:#6b7280;line-height:1.6;">No reviews this week. Send a follow-up email to recent guests asking for feedback — even one or two responses will help you understand what's working.</div>
       </div>`;
   }
 
@@ -215,97 +229,53 @@ const actionsHtml = (() => {
   const criticalCount = reviewsArray.filter(r => (Number(r.rating) || 0) <= 2).length;
   const oneStarCount  = reviewsArray.filter(r => (Number(r.rating) || 0) === 1).length;
 
-  // Helper: extract the count from a theme string like "Cleanliness issues (3)"
-  const themeCount = (label) => {
-    const match = label.match(/\((\d+)\)/);
-    return match ? Number(match[1]) : 1;
-  };
+  const themeCount = (label) => { const m = label.match(/\((\d+)\)/); return m ? Number(m[1]) : 1; };
+  const negMatch   = (kw) => topNegatives.find(t => t.toLowerCase().includes(kw.toLowerCase()));
 
-  // ── Rating-based action (always fires when there are critical reviews) ─────
+  // ── Priority 1: Unhappy guests (most urgent — always first if any) ─────────
   if (criticalCount > 0) {
-    const extra = oneStarCount > 0 ? ` (${oneStarCount} gave 1 star)` : '';
-    actions.push({ icon: '📞', title: 'Reach Out to Unhappy Guests',
-      body: `${criticalCount} guest${criticalCount !== 1 ? 's' : ''} rated you 2 stars or below${extra}. Contact them personally within 24 hours — a genuine apology and offer to make things right can recover the relationship and sometimes even the review.` });
+    const extra = oneStarCount > 0 ? ` (${oneStarCount} gave 1&#8209;star)` : '';
+    actions.push({ icon: '&#128222;', title: 'Reach Out to Unhappy Guests',
+      body: `${criticalCount} guest${criticalCount !== 1 ? 's' : ''} rated you 2 stars or below${extra}. Contact them personally within 24 hours — a genuine apology can often turn a bad review around.` });
   }
 
-  // ── Theme-based actions (fire based on expanded keyword matching) ──────────
-  const negMatch = (keyword) => topNegatives.find(t => t.toLowerCase().includes(keyword.toLowerCase()));
-
-  const cleanTheme = negMatch('Cleanliness');
-  if (cleanTheme) {
-    const n = themeCount(cleanTheme);
-    actions.push({ icon: '🧹', title: 'Fix Cleanliness Standards',
-      body: `${n} guest${n !== 1 ? 's' : ''} flagged cleanliness. Walk through every room and shared space today — inspect what guests actually see. Update your housekeeping checklist and add a supervisor sign-off before any room is marked ready.` });
+  // ── Priority 2: Single biggest negative theme only ─────────────────────────
+  const topNeg = topNegatives[0];
+  if (topNeg && actions.length < 2) {
+    const n     = themeCount(topNeg);
+    const label = topNeg.replace(/\s*\(\d+\)$/, '');
+    let icon = '&#9888;&#65039;', body = `${n} guest${n !== 1 ? 's' : ''} flagged this. Review the specific complaints and put a fix in place before next week.`;
+    if      (negMatch('Cleanliness'))              { icon = '&#129529;'; body = `${n} guest${n !== 1 ? 's' : ''} flagged cleanliness. Walk every room today, update your housekeeping checklist, and add a sign-off before marking any room ready.`; }
+    else if (negMatch('Service delay'))            { icon = '&#9200;&#65039;'; body = `${n} guest${n !== 1 ? 's' : ''} experienced long waits. Review staffing during peak hours and simplify your check-in process.`; }
+    else if (negMatch('Staff'))                    { icon = '&#127892;'; body = `${n} guest${n !== 1 ? 's' : ''} had a poor experience with staff. Hold a short team briefing and revisit your hospitality standards.`; }
+    else if (negMatch('Pest'))                     { icon = '&#128027;'; body = `Pest complaints directly damage your reputation. Call a licensed pest control service today and close affected areas until cleared.`; }
+    else if (negMatch('Noise'))                    { icon = '&#128263;'; body = `${n} guest${n !== 1 ? 's' : ''} were disturbed by noise. Investigate the source and enforce a clear quiet-hours policy.`; }
+    else if (negMatch('Maintenance'))              { icon = '&#128295;'; body = `${n} guest${n !== 1 ? 's' : ''} reported broken or faulty items. Do a walkthrough today and prioritise anything affecting comfort.`; }
+    else if (negMatch('Value'))                    { icon = '&#128176;'; body = `Guests questioned your pricing. Add more value to stays or make sure your listing sets clearer expectations.`; }
+    actions.push({ icon, title: `Fix: ${label}`, body });
   }
 
-  const serviceTheme = negMatch('Service delay') || negMatch('Service');
-  if (serviceTheme) {
-    const n = themeCount(serviceTheme);
-    actions.push({ icon: '⏱️', title: 'Cut Response & Wait Times',
-      body: `${n} guest${n !== 1 ? 's' : ''} mentioned slow service or long waits. Map your busiest hours and make sure staffing matches demand. If check-in is slow, consider a pre-arrival form to speed things up.` });
+  // ── Priority 3: Rating nudge or positive reinforcement ────────────────────
+  if (actions.length < 3) {
+    if (avgRating < 4) {
+      actions.push({ icon: '&#11088;', title: 'Manage Your Online Rating',
+        body: `At ${avgRating.toFixed(1)} stars you're losing potential bookings. Reply to negative reviews within 48 hours and start asking happy guests to leave a review.` });
+    } else if (topPositives.length > 0) {
+      const highlight = topPositives[0].replace(/\s*\(\d+\)$/, '').toLowerCase();
+      actions.push({ icon: '&#128170;', title: "Keep Up What's Working",
+        body: `Guests consistently praise your ${highlight}. Make sure every guest gets that same experience and highlight it in your marketing.` });
+    }
   }
 
-  const staffTheme = negMatch('Staff');
-  if (staffTheme) {
-    const n = themeCount(staffTheme);
-    actions.push({ icon: '🎓', title: 'Address Staff Behaviour',
-      body: `${n} guest${n !== 1 ? 's' : ''} had a poor experience with staff. Hold a short team briefing this week — share specific examples from reviews (without naming guests) and revisit basic hospitality standards. Reinforce what good looks like.` });
-  }
-
-  const pestTheme = negMatch('Pest');
-  if (pestTheme) {
-    actions.push({ icon: '🐛', title: 'Pest Control — Act Immediately',
-      body: 'Pest mentions in reviews are reputation killers. Call a licensed pest control service today, not next week. Document everything for compliance and close any affected rooms until cleared.' });
-  }
-
-  const noiseTheme = negMatch('Noise');
-  if (noiseTheme) {
-    const n = themeCount(noiseTheme);
-    actions.push({ icon: '🔇', title: 'Reduce Noise Complaints',
-      body: `${n} guest${n !== 1 ? 's' : ''} were disturbed by noise. Identify the source — neighbouring rooms, street noise, or internal operations. Implement a quiet-hours policy and communicate it clearly at check-in.` });
-  }
-
-  const maintTheme = negMatch('Maintenance');
-  if (maintTheme) {
-    const n = themeCount(maintTheme);
-    actions.push({ icon: '🔧', title: 'Maintenance Walkthrough',
-      body: `${n} guest${n !== 1 ? 's' : ''} mentioned broken or malfunctioning items. Do a full property walkthrough today and log everything that needs attention. Prioritise anything that directly affects comfort — heating, hot water, locks.` });
-  }
-
-  const valueTheme = negMatch('Value');
-  if (valueTheme) {
-    actions.push({ icon: '💰', title: 'Justify Your Pricing',
-      body: `Guests questioned whether the price matched the experience. Either improve what's included (better toiletries, faster Wi-Fi, welcome drink) or make sure your listing accurately sets expectations so guests aren't surprised.` });
-  }
-
-  // ── Rating-level fallback (fires when no themes matched but rating is low) ──
-  if (actions.length === 0 && avgRating < 4) {
-    actions.push({ icon: '📈', title: 'Investigate What's Dragging Your Rating',
-      body: `Your average is ${avgRating.toFixed(1)}/5.0 across ${reviewCount} review${reviewCount !== 1 ? 's' : ''} this week. Read every review carefully and pick the single most common complaint. Fix that one thing before the next report.` });
-  }
-
-  // ── Online reputation nudge (fires when rating is below 4) ────────────────
-  if (avgRating < 4) {
-    actions.push({ icon: '⭐', title: 'Actively Manage Your Online Rating',
-      body: `At ${avgRating.toFixed(1)} stars, new guests are choosing competitors. Reply to every negative review within 48 hours — a thoughtful response shows you care and can soften the impact. Then start asking happy guests to share their experience online.` });
-  }
-
-  // ── Positive reinforcement (fires when doing well) ─────────────────────────
-  if (topPositives.length > 0 && avgRating >= 4) {
-    const highlights = topPositives.slice(0, 2).map(t => t.replace(/\s*\(\d+\)$/, '').toLowerCase()).join(' and ');
-    actions.push({ icon: '💪', title: 'Double Down on What's Working',
-      body: `Guests are consistently praising your ${highlights}. Highlight this in your listing photos and descriptions. Make sure new staff understand exactly what's driving these compliments so the standard doesn't slip.` });
-  }
-
-  // ── Final safety net ───────────────────────────────────────────────────────
+  // ── Fallback if still empty ────────────────────────────────────────────────
   if (actions.length === 0) {
-    actions.push({ icon: '✅', title: 'Maintain Your Standards',
-      body: `${reviewCount} review${reviewCount !== 1 ? 's' : ''} this week with a ${avgRating.toFixed(1)}/5.0 average — solid performance. Stay visible: walk the property daily, chat with guests, and catch small issues before they make it into a review.` });
+    actions.push({ icon: '&#9989;', title: 'Maintain Your Standards',
+      body: `${reviewCount} review${reviewCount !== 1 ? 's' : ''} at ${avgRating.toFixed(1)}/5.0 — solid week. Stay consistent and keep engaging with guest feedback.` });
   }
 
   return actions.map(a => `
-    <div style="background:#fff;border-radius:12px;padding:20px;border:1px solid #e5e7eb;margin-bottom:10px;">
-      <div style="font-size:14px;font-weight:600;color:#111827;margin-bottom:8px;">${a.icon} ${esc(a.title)}</div>
+    <div style="background:#ffffff;border-radius:12px;padding:20px;border:1px solid #e5e7eb;margin-bottom:10px;">
+      <div style="font-size:14px;font-weight:700;color:#111827;margin-bottom:8px;">${a.icon} ${esc(a.title)}</div>
       <div style="font-size:13px;color:#6b7280;line-height:1.6;">${a.body}</div>
     </div>`).join('');
 })();
@@ -325,11 +295,11 @@ const emailHtml = `<!DOCTYPE html>
 <table width="100%" style="max-width:680px;background:#ffffff;border-radius:24px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
 
   <!-- Header -->
-  <tr><td style="background:linear-gradient(135deg,#1e293b 0%,#0f172a 100%);padding:40px 40px 32px;">
-    <div style="font-size:13px;font-weight:700;color:#f97316;text-transform:uppercase;letter-spacing:2px;margin-bottom:8px;">Verity Insight</div>
+  <tr><td style="background:linear-gradient(135deg,#f97316 0%,#ea580c 100%);padding:40px 40px 32px;">
+    <div style="font-size:13px;font-weight:700;color:#ffffff;text-transform:uppercase;letter-spacing:2px;margin-bottom:8px;opacity:0.85;">Verity Insight</div>
     <div style="font-size:26px;font-weight:800;color:#ffffff;margin-bottom:6px;">Weekly Ops Briefing</div>
-    <div style="font-size:15px;color:#94a3b8;">${esc(businessName)}${location ? ' · ' + esc(location) : ''}</div>
-    <div style="font-size:13px;color:#64748b;margin-top:6px;">Week ending ${dateDisplay}</div>
+    <div style="font-size:15px;color:#ffffff;opacity:0.9;margin-bottom:0;">${esc(businessName)}${location ? ' &middot; ' + esc(location) : ''}</div>
+    <div style="font-size:13px;color:#ffffff;opacity:0.7;margin-top:6px;">Week ending ${dateDisplay}</div>
   </td></tr>
 
   <!-- Body -->
@@ -347,7 +317,7 @@ const emailHtml = `<!DOCTYPE html>
       <td width="33%" style="background:#f9fafb;border-radius:16px;padding:24px 16px;text-align:center;border:1px solid #e5e7eb;">
         <div style="font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px;">Avg Rating</div>
         <div style="font-size:34px;font-weight:800;color:#f97316;line-height:1;margin-bottom:6px;">${avgRating.toFixed(1)}</div>
-        <div style="margin-top:4px;">${starDisplay}</div>
+        <div style="margin-top:4px;white-space:nowrap;">${starDisplay}</div>
       </td>
       <td width="4%"></td>
       <td width="33%" style="background:#f9fafb;border-radius:16px;padding:24px 16px;text-align:center;border:1px solid #e5e7eb;">
